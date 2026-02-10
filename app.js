@@ -12,6 +12,7 @@ import {
   getFirestore,
   collection,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   onSnapshot,
@@ -69,8 +70,6 @@ const elements = {
   signInBtn: document.getElementById("signInBtn"),
   signOutBtn: document.getElementById("signOutBtn"),
   userEmail: document.getElementById("userEmail"),
-  signedOutView: document.getElementById("signedOutView"),
-  authedView: document.getElementById("authedView"),
   versionNumber: document.getElementById("versionNumber"),
   inventorySection: document.getElementById("inventorySection"),
   refreshPricesBtn: document.getElementById("refreshPricesBtn"),
@@ -79,6 +78,11 @@ const elements = {
   silverPrice: document.getElementById("silverPrice"),
   platinumPrice: document.getElementById("platinumPrice"),
   totalValue: document.getElementById("totalValue"),
+  summaryItems: document.getElementById("summaryItems"),
+  summaryTotalGrams: document.getElementById("summaryTotalGrams"),
+  summaryGoldGrams: document.getElementById("summaryGoldGrams"),
+  summarySilverGrams: document.getElementById("summarySilverGrams"),
+  summaryPlatinumGrams: document.getElementById("summaryPlatinumGrams"),
   goldValue: document.getElementById("goldValue"),
   silverValue: document.getElementById("silverValue"),
   platinumValue: document.getElementById("platinumValue"),
@@ -108,6 +112,7 @@ const state = {
   user: null,
   items: [],
   filteredItems: [],
+  editingId: null,
   prices: {
     gold: null,
     silver: null,
@@ -217,6 +222,23 @@ function calculateTotals() {
 
   const totalValue = goldValue + silverValue + platinumValue;
   elements.totalValue.textContent = formatCurrency(totalValue);
+
+  if (elements.summaryItems) {
+    elements.summaryItems.textContent = `${state.items.length}`;
+  }
+  if (elements.summaryTotalGrams) {
+    const totalGrams = totals.gold + totals.silver + totals.platinum;
+    elements.summaryTotalGrams.textContent = formatNumber(totalGrams);
+  }
+  if (elements.summaryGoldGrams) {
+    elements.summaryGoldGrams.textContent = formatNumber(totals.gold);
+  }
+  if (elements.summarySilverGrams) {
+    elements.summarySilverGrams.textContent = formatNumber(totals.silver);
+  }
+  if (elements.summaryPlatinumGrams) {
+    elements.summaryPlatinumGrams.textContent = formatNumber(totals.platinum);
+  }
 }
 
 function renderPrices() {
@@ -266,6 +288,7 @@ async function fetchSpotPrices() {
 
   state.updatedAt = latestUpdate;
   renderPrices();
+  renderItems();
   calculateTotals();
 }
 
@@ -283,6 +306,37 @@ function renderItems() {
     const totalGrams = item.gramsPerItem * item.quantity;
     const pricePerGram = getPricePerGram(item.metal);
     const value = pricePerGram ? totalGrams * pricePerGram : null;
+    const isEditing = state.editingId === item.id;
+
+    if (isEditing) {
+      let itemTypeField = `<input class="form-control form-control-sm" data-field="itemType" value="${item.itemType ?? ""}">`;
+      if (item.category === "coin") {
+        const { gramsMap } = getCoinConfigForMetal(item.metal);
+        const options = Object.keys(gramsMap)
+          .map((name) => {
+            const selected = name === item.itemType ? " selected" : "";
+            return `<option value="${name}"${selected}>${name}</option>`;
+          })
+          .join("");
+        itemTypeField = `<select class="form-select form-select-sm" data-field="itemType">${options}</select>`;
+      }
+
+      return `
+        <tr>
+          <td class="text-capitalize">${item.metal}</td>
+          <td>${itemTypeField}</td>
+          <td><input class="form-control form-control-sm" data-field="year" type="number" min="1700" max="2100" value="${item.year ?? ""}"></td>
+          <td><input class="form-control form-control-sm" data-field="gramsPerItem" type="number" step="0.0001" min="0" value="${item.gramsPerItem}"></td>
+          <td><input class="form-control form-control-sm" data-field="quantity" type="number" step="1" min="1" value="${item.quantity}"></td>
+          <td>${formatNumber(totalGrams)}</td>
+          <td>${formatCurrency(value)}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-primary" data-action="save" data-id="${item.id}">Save</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" data-action="cancel" data-id="${item.id}">Cancel</button>
+          </td>
+        </tr>
+      `;
+    }
 
     return `
       <tr>
@@ -294,7 +348,8 @@ function renderItems() {
         <td>${formatNumber(totalGrams)}</td>
         <td>${formatCurrency(value)}</td>
         <td class="text-end">
-          <button class="btn btn-sm btn-outline-danger" data-id="${item.id}">Delete</button>
+          <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${item.id}">Edit</button>
+          <button class="btn btn-sm btn-outline-danger ms-1" data-action="delete" data-id="${item.id}">Delete</button>
         </td>
       </tr>
     `;
@@ -306,7 +361,61 @@ function renderItems() {
     button.addEventListener("click", async () => {
       const id = button.getAttribute("data-id");
       if (!state.user) return;
-      await deleteDoc(doc(db, "users", state.user.uid, "items", id));
+      const action = button.getAttribute("data-action");
+      if (action === "edit") {
+        state.editingId = id;
+        renderItems();
+        return;
+      }
+      if (action === "cancel") {
+        state.editingId = null;
+        renderItems();
+        return;
+      }
+      if (action === "save") {
+        const row = button.closest("tr");
+        if (!row) return;
+        const existing = state.items.find((entry) => entry.id === id);
+        if (!existing) return;
+        const fields = row.querySelectorAll("[data-field]");
+        const updates = {};
+        fields.forEach((field) => {
+          const key = field.getAttribute("data-field");
+          let value = field.value;
+          if (key === "year") {
+            value = value ? Number(value) : existing.year ?? null;
+          }
+          if (key === "gramsPerItem" || key === "quantity") {
+            value = value ? Number(value) : existing[key];
+          }
+          if (key === "itemType") {
+            value = value ? value.trim() : existing.itemType;
+          }
+          updates[key] = value;
+        });
+        if (existing.category === "coin") {
+          const { gramsMap } = getCoinConfigForMetal(existing.metal);
+          if (updates.itemType in gramsMap) {
+            updates.gramsPerItem = gramsMap[updates.itemType];
+          }
+        }
+        if (!updates.itemType || updates.gramsPerItem <= 0 || updates.quantity <= 0) {
+          return;
+        }
+        try {
+          await updateDoc(doc(db, "users", state.user.uid, "items", id), updates);
+        } catch (error) {
+          console.error("Failed to save item", error);
+          alert("Save failed. Please try again.");
+        } finally {
+          state.editingId = null;
+          renderItems();
+        }
+        return;
+      }
+      if (action === "delete") {
+        await deleteDoc(doc(db, "users", state.user.uid, "items", id));
+      }
     });
   });
 
@@ -366,6 +475,11 @@ async function handleFormSubmit(event) {
   event.preventDefault();
   if (!state.user) return;
 
+  const currentMetal = elements.metal.value;
+  const currentCategory = elements.category.value;
+  const currentCoinType = elements.coinType.value;
+  const currentBullionPreset = elements.bullionPreset?.value ?? "";
+
   const category = elements.category.value;
   let itemType = category === "coin" ? elements.coinType.value : elements.bullionName.value.trim();
   const gramsPerItem = Number(elements.grams.value);
@@ -392,9 +506,22 @@ async function handleFormSubmit(event) {
   });
 
   elements.itemForm.reset();
-  elements.category.value = "coin";
+  elements.metal.value = currentMetal;
+  elements.category.value = currentCategory;
+  if (elements.bullionPreset && currentBullionPreset) {
+    elements.bullionPreset.value = currentBullionPreset;
+  }
+  if (currentCategory === "coin") {
+    populateCoinOptions();
+    elements.coinType.value = currentCoinType;
+  }
   toggleCategoryFields();
-  setFormDefaults();
+  if (currentCategory === "coin") {
+    setFormDefaults();
+  } else {
+    setBullionDefaults();
+  }
+  updateCategoryLabel();
 }
 
 function bindEvents() {
@@ -448,12 +575,7 @@ onAuthStateChanged(auth, (user) => {
   elements.signOutBtn.classList.toggle("d-none", !isAuthed);
   elements.userEmail.textContent = user?.email ?? "";
   document.body.classList.toggle("authed", isAuthed);
-  if (elements.signedOutView) {
-    elements.signedOutView.style.display = isAuthed ? "none" : "";
-  }
-  if (elements.authedView) {
-    elements.authedView.style.display = isAuthed ? "" : "none";
-  }
+  elements.inventorySection.classList.toggle("d-none", !isAuthed);
 
   if (isAuthed) {
     subscribeToItems();

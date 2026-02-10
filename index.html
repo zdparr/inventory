@@ -20,17 +20,7 @@
     </nav>
 
     <main class="container py-4">
-      <section id="signedOutView" class="d-flex flex-column align-items-center justify-content-center py-5">
-        <div class="text-center">
-          <h1 class="h3 mb-3">Welcome</h1>
-          <p class="text-muted mb-4">Sign in to view your precious metals inventory.</p>
-          <div class="text-uppercase small text-muted">Version</div>
-          <div id="versionNumber" class="fw-semibold">v0.1.0</div>
-        </div>
-      </section>
-
-      <section id="authedView">
-        <section class="mb-4">
+      <section id="pricesSection" class="mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
           <h1 class="h3 m-0">Dashboard</h1>
           <button id="refreshPricesBtn" class="btn btn-outline-primary btn-sm">Refresh spot prices</button>
@@ -38,20 +28,6 @@
         <div class="text-muted small">Prices from gold-api.com (USD per troy ounce). Converted to USD per gram for totals.</div>
 
         <div class="row g-3 mt-2">
-          <div class="col-md-4">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <div class="d-flex justify-content-between">
-                  <div>
-                    <div class="text-uppercase small text-muted">Total Value</div>
-                    <div id="totalValue" class="display-6 fw-semibold">$0.00</div>
-                  </div>
-                  <div class="badge bg-dark align-self-start">All Metals</div>
-                </div>
-                <div id="pricesUpdatedAt" class="small text-muted mt-2">Prices not loaded</div>
-              </div>
-            </div>
-          </div>
           <div class="col-md-4">
             <div class="card shadow-sm">
               <div class="card-body">
@@ -80,9 +56,57 @@
             </div>
           </div>
         </div>
-        </section>
+      </section>
 
-        <section id="inventorySection">
+      <section id="summarySection" class="mb-4">
+        <div class="row g-3">
+          <div class="col-lg-6">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <div class="text-uppercase small text-muted">Total Value</div>
+                    <div id="totalValue" class="display-6 fw-semibold">$0.00</div>
+                  </div>
+                  <div class="badge bg-dark align-self-start">All Metals</div>
+                </div>
+                <div id="pricesUpdatedAt" class="small text-muted mt-2">Prices not loaded</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="text-uppercase small text-muted mb-2">Inventory Summary</div>
+                <div class="d-flex flex-wrap gap-3">
+                  <div>
+                    <div class="text-muted small">Items</div>
+                    <div id="summaryItems" class="fw-semibold">0</div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Total Grams</div>
+                    <div id="summaryTotalGrams" class="fw-semibold">0.0000</div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Gold (g)</div>
+                    <div id="summaryGoldGrams" class="fw-semibold">0.0000</div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Silver (g)</div>
+                    <div id="summarySilverGrams" class="fw-semibold">0.0000</div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Platinum (g)</div>
+                    <div id="summaryPlatinumGrams" class="fw-semibold">0.0000</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventorySection">
         <div class="row g-4">
           <div class="col-lg-5">
             <div class="card shadow-sm">
@@ -196,7 +220,6 @@
             </div>
           </div>
         </div>
-        </section>
       </section>
     </main>
 

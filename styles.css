@@ -15,10 +15,6 @@
   letter-spacing: -0.02em;
 }
 
-body:not(.authed) #authedView {
-  display: none;
-}
-
-body.authed #signedOutView {
+body:not(.authed) #inventorySection {
   display: none;
 }
