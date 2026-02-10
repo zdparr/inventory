@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "personal-inventory-f1f9f",
+    "prod": "personal-inventory-f1f9f"
+  },
+  "targets": {},
+  "etags": {}
+}
