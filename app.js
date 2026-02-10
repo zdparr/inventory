@@ -21,7 +21,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const TROY_OUNCE_G = 31.1034768;
-const APP_VERSION = "v1.1.1";
+const APP_VERSION = "v1.1.2";
 const COIN_GRAMS_DEFAULT = {
   "Dollar": 24.05,
   "Half Dollar": 12.5,
@@ -155,6 +155,9 @@ function updateCategoryLabel() {
 }
 
 function setFormDefaults() {
+  if (elements.category.value !== "coin") {
+    return;
+  }
   const { gramsMap } = getCoinConfigForMetal(elements.metal.value);
   const grams = gramsMap[elements.coinType.value] ?? 0;
   elements.grams.value = grams;
@@ -170,17 +173,21 @@ function toggleCategoryFields() {
   elements.yearField.classList.toggle("d-none", !isSilverCoin);
   elements.year.required = isSilverCoin;
 
-  if (!isCoin) {
+  if (isCoin) {
+    setFormDefaults();
+  } else {
     setBullionDefaults();
   }
 }
 
 function setBullionDefaults() {
   if (!elements.bullionPreset) return;
-  const grams = BULLION_PRESETS[elements.bullionPreset.value] ?? 0;
-  if (grams > 0) {
-    elements.grams.value = grams;
+  const preset = elements.bullionPreset.value;
+  const grams = BULLION_PRESETS[preset] ?? 0;
+  if (preset === "Custom") {
+    return;
   }
+  elements.grams.value = grams;
 }
 
 function getPricePerGram(metal) {
@@ -417,7 +424,6 @@ function bindEvents() {
   elements.metal.addEventListener("change", () => {
     updateCategoryLabel();
     populateCoinOptions();
-    setFormDefaults();
     toggleCategoryFields();
   });
   elements.itemForm.addEventListener("submit", handleFormSubmit);
