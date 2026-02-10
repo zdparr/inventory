@@ -47,6 +47,14 @@ const COIN_GRAMS_GOLDBACK = {
   "50 Goldback (1/20 oz)": 1.555
 };
 
+const BULLION_PRESETS = {
+  "1 oz": 31.1035,
+  "1/2 oz": 15.5517,
+  "1/4 oz": 7.77587,
+  "1/10 oz": 3.11035,
+  "Custom": 0
+};
+
 const priceEndpoints = {
   gold: "https://api.gold-api.com/price/XAU",
   silver: "https://api.gold-api.com/price/XAG",
@@ -89,6 +97,7 @@ const elements = {
   yearField: document.getElementById("yearField"),
   year: document.getElementById("year"),
   bullionFields: document.getElementById("bullionFields"),
+  bullionPreset: document.getElementById("bullionPreset"),
   bullionName: document.getElementById("bullionName"),
   grams: document.getElementById("grams"),
   quantity: document.getElementById("quantity"),
@@ -160,6 +169,18 @@ function toggleCategoryFields() {
   const isSilverCoin = isCoin && elements.metal.value === "silver";
   elements.yearField.classList.toggle("d-none", !isSilverCoin);
   elements.year.required = isSilverCoin;
+
+  if (!isCoin) {
+    setBullionDefaults();
+  }
+}
+
+function setBullionDefaults() {
+  if (!elements.bullionPreset) return;
+  const grams = BULLION_PRESETS[elements.bullionPreset.value] ?? 0;
+  if (grams > 0) {
+    elements.grams.value = grams;
+  }
 }
 
 function getPricePerGram(metal) {
@@ -339,10 +360,14 @@ async function handleFormSubmit(event) {
   if (!state.user) return;
 
   const category = elements.category.value;
-  const itemType = category === "coin" ? elements.coinType.value : elements.bullionName.value.trim();
+  let itemType = category === "coin" ? elements.coinType.value : elements.bullionName.value.trim();
   const gramsPerItem = Number(elements.grams.value);
   const quantity = Number(elements.quantity.value);
   const yearValue = elements.year.value ? Number(elements.year.value) : null;
+
+  if (category === "bullion" && elements.bullionPreset?.value && !itemType) {
+    itemType = elements.bullionPreset.value;
+  }
 
   if (!itemType || gramsPerItem <= 0 || quantity <= 0) {
     return;
@@ -388,6 +413,7 @@ function bindEvents() {
   elements.refreshPricesBtn.addEventListener("click", fetchSpotPrices);
   elements.category.addEventListener("change", toggleCategoryFields);
   elements.coinType.addEventListener("change", setFormDefaults);
+  elements.bullionPreset.addEventListener("change", setBullionDefaults);
   elements.metal.addEventListener("change", () => {
     updateCategoryLabel();
     populateCoinOptions();
@@ -436,6 +462,7 @@ populateCoinOptions();
 updateCategoryLabel();
 setFormDefaults();
 toggleCategoryFields();
+setBullionDefaults();
 bindEvents();
 fetchSpotPrices();
 
