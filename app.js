@@ -22,7 +22,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const TROY_OUNCE_G = 31.1034768;
-const APP_VERSION = "v1.1.2";
+const APP_VERSION = "v1.1.6";
 const COIN_GRAMS_DEFAULT = {
   "Dollar": 24.05,
   "Half Dollar": 12.5,
@@ -78,16 +78,16 @@ const elements = {
   silverPrice: document.getElementById("silverPrice"),
   platinumPrice: document.getElementById("platinumPrice"),
   totalValue: document.getElementById("totalValue"),
-  summaryItems: document.getElementById("summaryItems"),
-  summaryTotalGrams: document.getElementById("summaryTotalGrams"),
-  summaryGoldGrams: document.getElementById("summaryGoldGrams"),
-  summarySilverGrams: document.getElementById("summarySilverGrams"),
-  summaryPlatinumGrams: document.getElementById("summaryPlatinumGrams"),
+  summaryBullionOz: document.getElementById("summaryBullionOz"),
+  summaryBullionGoldOz: document.getElementById("summaryBullionGoldOz"),
+  summaryBullionSilverOz: document.getElementById("summaryBullionSilverOz"),
+  summaryBullionPlatinumOz: document.getElementById("summaryBullionPlatinumOz"),
+  summaryCoinList: document.getElementById("summaryCoinList"),
   goldValue: document.getElementById("goldValue"),
   silverValue: document.getElementById("silverValue"),
   platinumValue: document.getElementById("platinumValue"),
   itemCount: document.getElementById("itemCount"),
-  itemsBody: document.getElementById("itemsBody"),
+  itemsContainer: document.getElementById("itemsAccordion"),
   itemForm: document.getElementById("itemForm"),
   searchInput: document.getElementById("searchInput"),
   metalFilter: document.getElementById("metalFilter"),
@@ -223,21 +223,48 @@ function calculateTotals() {
   const totalValue = goldValue + silverValue + platinumValue;
   elements.totalValue.textContent = formatCurrency(totalValue);
 
-  if (elements.summaryItems) {
-    elements.summaryItems.textContent = `${state.items.length}`;
+  const bullionTotals = {
+    gold: 0,
+    silver: 0,
+    platinum: 0
+  };
+  const coinCounts = new Map();
+
+  state.items.forEach((item) => {
+    const totalGrams = item.gramsPerItem * item.quantity;
+    if (item.category === "bullion") {
+      bullionTotals[item.metal] += totalGrams;
+    } else if (item.category === "coin") {
+      const label = `${item.metal} ${item.itemType}`;
+      const current = coinCounts.get(label) ?? 0;
+      coinCounts.set(label, current + item.quantity);
+    }
+  });
+
+  const bullionOzTotal =
+    (bullionTotals.gold + bullionTotals.silver + bullionTotals.platinum) / TROY_OUNCE_G;
+  if (elements.summaryBullionOz) {
+    elements.summaryBullionOz.textContent = formatNumber(bullionOzTotal);
   }
-  if (elements.summaryTotalGrams) {
-    const totalGrams = totals.gold + totals.silver + totals.platinum;
-    elements.summaryTotalGrams.textContent = formatNumber(totalGrams);
+  if (elements.summaryBullionGoldOz) {
+    elements.summaryBullionGoldOz.textContent = formatNumber(bullionTotals.gold / TROY_OUNCE_G);
   }
-  if (elements.summaryGoldGrams) {
-    elements.summaryGoldGrams.textContent = formatNumber(totals.gold);
+  if (elements.summaryBullionSilverOz) {
+    elements.summaryBullionSilverOz.textContent = formatNumber(bullionTotals.silver / TROY_OUNCE_G);
   }
-  if (elements.summarySilverGrams) {
-    elements.summarySilverGrams.textContent = formatNumber(totals.silver);
+  if (elements.summaryBullionPlatinumOz) {
+    elements.summaryBullionPlatinumOz.textContent = formatNumber(bullionTotals.platinum / TROY_OUNCE_G);
   }
-  if (elements.summaryPlatinumGrams) {
-    elements.summaryPlatinumGrams.textContent = formatNumber(totals.platinum);
+
+  if (elements.summaryCoinList) {
+    if (!coinCounts.size) {
+      elements.summaryCoinList.textContent = "No coins yet.";
+    } else {
+      const items = Array.from(coinCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      elements.summaryCoinList.innerHTML = items
+        .map(([label, count]) => `<div>${label}: <strong>${count}</strong></div>`)
+        .join("");
+    }
   }
 }
 
@@ -297,67 +324,160 @@ function renderItems() {
   elements.itemCount.textContent = `${visibleItems.length} items`;
 
   if (!visibleItems.length) {
-    elements.itemsBody.innerHTML = '<tr><td colspan="8" class="text-muted">No items yet.</td></tr>';
+    elements.itemsContainer.innerHTML = '<div class="text-muted">No items yet.</div>';
     calculateTotals();
     return;
   }
 
-  const rows = visibleItems.map((item) => {
-    const totalGrams = item.gramsPerItem * item.quantity;
-    const pricePerGram = getPricePerGram(item.metal);
-    const value = pricePerGram ? totalGrams * pricePerGram : null;
-    const isEditing = state.editingId === item.id;
+  const groups = new Map();
+  visibleItems.forEach((item) => {
+    const labelCategory = item.category === "bullion" ? "Bullion" : "Coin";
+    if (!groups.has(labelCategory)) {
+      groups.set(labelCategory, []);
+    }
+    groups.get(labelCategory).push(item);
+  });
 
-    if (isEditing) {
-      let itemTypeField = `<input class="form-control form-control-sm" data-field="itemType" value="${item.itemType ?? ""}">`;
-      if (item.category === "coin") {
-        const { gramsMap } = getCoinConfigForMetal(item.metal);
-        const options = Object.keys(gramsMap)
-          .map((name) => {
-            const selected = name === item.itemType ? " selected" : "";
-            return `<option value="${name}"${selected}>${name}</option>`;
-          })
-          .join("");
-        itemTypeField = `<select class="form-select form-select-sm" data-field="itemType">${options}</select>`;
+  const accordionItems = Array.from(groups.entries()).map(([categoryLabel, categoryItems], idx) => {
+    const totalQty = categoryItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalGrams = categoryItems.reduce((sum, item) => sum + item.gramsPerItem * item.quantity, 0);
+    const totalValue = categoryItems.reduce((sum, item) => {
+      const itemPricePerGram = getPricePerGram(item.metal);
+      if (!itemPricePerGram) return sum;
+      return sum + item.gramsPerItem * item.quantity * itemPricePerGram;
+    }, 0);
+
+    const metals = new Map();
+    categoryItems.forEach((item) => {
+      if (!metals.has(item.metal)) {
+        metals.set(item.metal, []);
+      }
+      metals.get(item.metal).push(item);
+    });
+
+    const metalSections = Array.from(metals.entries()).map(([metal, items], metalIdx) => {
+      const metalQty = items.reduce((sum, item) => sum + item.quantity, 0);
+      const metalGrams = items.reduce((sum, item) => sum + item.gramsPerItem * item.quantity, 0);
+      const metalValue = items.reduce((sum, item) => {
+        const itemPricePerGram = getPricePerGram(item.metal);
+        if (!itemPricePerGram) return sum;
+        return sum + item.gramsPerItem * item.quantity * itemPricePerGram;
+      }, 0);
+
+      const rows = items.map((item) => {
+        const rowTotalGrams = item.gramsPerItem * item.quantity;
+        const rowPricePerGram = getPricePerGram(item.metal);
+        const rowValue = rowPricePerGram ? rowTotalGrams * rowPricePerGram : null;
+        const isEditing = state.editingId === item.id;
+
+      if (isEditing) {
+        let itemTypeField = `<input class="form-control form-control-sm" data-field="itemType" value="${item.itemType ?? ""}">`;
+        if (item.category === "coin") {
+          const { gramsMap } = getCoinConfigForMetal(item.metal);
+          const options = Object.keys(gramsMap)
+            .map((name) => {
+              const selected = name === item.itemType ? " selected" : "";
+              return `<option value="${name}"${selected}>${name}</option>`;
+            })
+            .join("");
+          itemTypeField = `<select class="form-select form-select-sm" data-field="itemType">${options}</select>`;
+        }
+
+        return `
+          <tr>
+            <td class="text-capitalize">${item.metal}</td>
+            <td>${itemTypeField}</td>
+            <td><input class="form-control form-control-sm" data-field="year" type="number" min="1700" max="2100" value="${item.year ?? ""}"></td>
+            <td><input class="form-control form-control-sm" data-field="gramsPerItem" type="number" step="0.0001" min="0" value="${item.gramsPerItem}"></td>
+            <td><input class="form-control form-control-sm" data-field="quantity" type="number" step="1" min="1" value="${item.quantity}"></td>
+            <td>${formatNumber(rowTotalGrams)}</td>
+            <td>${formatCurrency(rowValue)}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-primary" data-action="save" data-id="${item.id}">Save</button>
+              <button class="btn btn-sm btn-outline-secondary ms-1" data-action="cancel" data-id="${item.id}">Cancel</button>
+            </td>
+          </tr>
+        `;
       }
 
       return `
         <tr>
           <td class="text-capitalize">${item.metal}</td>
-          <td>${itemTypeField}</td>
-          <td><input class="form-control form-control-sm" data-field="year" type="number" min="1700" max="2100" value="${item.year ?? ""}"></td>
-          <td><input class="form-control form-control-sm" data-field="gramsPerItem" type="number" step="0.0001" min="0" value="${item.gramsPerItem}"></td>
-          <td><input class="form-control form-control-sm" data-field="quantity" type="number" step="1" min="1" value="${item.quantity}"></td>
-          <td>${formatNumber(totalGrams)}</td>
-          <td>${formatCurrency(value)}</td>
+          <td>${item.itemType}</td>
+          <td>${item.year ?? "-"}</td>
+          <td>${formatNumber(item.gramsPerItem)}</td>
+          <td>${item.quantity}</td>
+          <td>${formatNumber(rowTotalGrams)}</td>
+          <td>${formatCurrency(rowValue)}</td>
           <td class="text-end">
-            <button class="btn btn-sm btn-primary" data-action="save" data-id="${item.id}">Save</button>
-            <button class="btn btn-sm btn-outline-secondary ms-1" data-action="cancel" data-id="${item.id}">Cancel</button>
+            <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${item.id}">Edit</button>
+            <button class="btn btn-sm btn-outline-danger ms-1" data-action="delete" data-id="${item.id}">Delete</button>
           </td>
         </tr>
       `;
-    }
+    });
+
+      return `
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading-${idx}-${metalIdx}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${idx}-${metalIdx}" aria-expanded="false" aria-controls="collapse-${idx}-${metalIdx}">
+              <div class="w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span class="fw-semibold text-capitalize">${metal}</span>
+                <span class="small text-muted">Qty: ${metalQty} • Grams: ${formatNumber(metalGrams)} • Value: ${formatCurrency(metalValue)}</span>
+              </div>
+            </button>
+          </h2>
+          <div id="collapse-${idx}-${metalIdx}" class="accordion-collapse collapse" aria-labelledby="heading-${idx}-${metalIdx}">
+            <div class="accordion-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Metal</th>
+                      <th>Type</th>
+                      <th>Year</th>
+                      <th>Grams</th>
+                      <th>Qty</th>
+                      <th>Total Grams</th>
+                      <th>Value</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows.join("")}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
 
     return `
-      <tr>
-        <td class="text-capitalize">${item.metal}</td>
-        <td>${item.itemType}</td>
-        <td>${item.year ?? "-"}</td>
-        <td>${formatNumber(item.gramsPerItem)}</td>
-        <td>${item.quantity}</td>
-        <td>${formatNumber(totalGrams)}</td>
-        <td>${formatCurrency(value)}</td>
-        <td class="text-end">
-          <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${item.id}">Edit</button>
-          <button class="btn btn-sm btn-outline-danger ms-1" data-action="delete" data-id="${item.id}">Delete</button>
-        </td>
-      </tr>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-${idx}">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${idx}" aria-expanded="false" aria-controls="collapse-${idx}">
+            <div class="w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span class="fw-semibold text-capitalize">${categoryLabel}</span>
+              <span class="small text-muted">Qty: ${totalQty} • Grams: ${formatNumber(totalGrams)} • Value: ${formatCurrency(totalValue)}</span>
+            </div>
+          </button>
+        </h2>
+        <div id="collapse-${idx}" class="accordion-collapse collapse" aria-labelledby="heading-${idx}">
+          <div class="accordion-body p-0">
+            <div class="accordion border-0">
+              ${metalSections.join("")}
+            </div>
+          </div>
+        </div>
+      </div>
     `;
   });
 
-  elements.itemsBody.innerHTML = rows.join("");
+  elements.itemsContainer.innerHTML = accordionItems.join("");
 
-  elements.itemsBody.querySelectorAll("button[data-id]").forEach((button) => {
+  elements.itemsContainer.querySelectorAll("button[data-id]").forEach((button) => {
     button.addEventListener("click", async () => {
       const id = button.getAttribute("data-id");
       if (!state.user) return;
