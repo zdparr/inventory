@@ -18,3 +18,15 @@
 body:not(.authed) #inventorySection {
   display: none;
 }
+
+#householdSelect {
+  min-width: 180px;
+}
+
+#summaryCoinList {
+  overflow-x: auto;
+}
+
+#summaryCoinList > div {
+  white-space: nowrap;
+}
