@@ -6,55 +6,114 @@
     <title>Precious Metals Inventory</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="styles.css?v=1.2.7" rel="stylesheet">
+    <link href="styles.css?v=1.3.0" rel="stylesheet">
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg border-bottom bg-white">
+    <nav class="top-app-bar navbar navbar-expand-lg border-bottom bg-white sticky-top">
       <div class="container-fluid px-3 px-lg-4">
-        <span class="navbar-brand fw-semibold">Precious Metals Inventory</span>
-        <div class="d-flex gap-2 align-items-center">
+        <span class="navbar-brand fw-semibold m-0">Precious Metals Inventory</span>
+        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end ms-auto">
           <select id="householdSelect" class="form-select form-select-sm d-none"></select>
-          <span id="userEmail" class="text-muted small"></span>
-          <button id="signInBtn" class="btn btn-primary btn-sm">Sign in with Google</button>
-          <button id="signOutBtn" class="btn btn-outline-secondary btn-sm d-none">Sign out</button>
+          <button id="refreshPricesBtn" class="btn btn-primary btn-sm" type="button">Refresh spot prices</button>
+          <span id="userEmail" class="text-muted small user-email-pill"></span>
+          <button id="signInBtn" class="btn btn-outline-primary btn-sm" type="button">Sign in with Google</button>
+          <button id="signOutBtn" class="btn btn-outline-secondary btn-sm d-none" type="button">Sign out</button>
         </div>
       </div>
     </nav>
 
-    <main class="container-fluid px-3 px-lg-4 py-4">
-      <section id="pricesSection" class="mb-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-          <h1 class="h3 m-0">Dashboard</h1>
-          <button id="refreshPricesBtn" class="btn btn-outline-primary btn-sm">Refresh spot prices</button>
-        </div>
-        <div class="text-muted small">Prices from gold-api.com (USD per troy ounce). Converted to USD per gram for totals.</div>
+    <main class="container-fluid px-3 px-lg-4 py-4 dashboard-main">
+      <section id="heroSection" class="mb-4">
+        <div class="dashboard-card hero-card p-4 p-lg-5">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+              <div class="section-title mb-2">Portfolio Summary</div>
+              <div id="totalValue" class="portfolio-total">$0.00</div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <div id="pricesUpdatedAt" class="text-muted small">Prices not loaded</div>
+                <div class="text-muted small">&bull;</div>
+                <div id="pricesUpdatedRelative" class="text-muted small">Updated just now</div>
+              </div>
+            </div>
+            <div class="w-100 w-lg-auto">
+              <div class="section-title mb-2">Metal Values</div>
+              <div class="metal-inline-values">
+                <div class="metal-inline-item">
+                  <span class="metal-dot metal-gold"></span>
+                  <span class="metal-inline-label">Gold</span>
+                  <span id="goldValue" class="metal-inline-value">-</span>
+                </div>
+                <div class="metal-inline-item">
+                  <span class="metal-dot metal-silver"></span>
+                  <span class="metal-inline-label">Silver</span>
+                  <span id="silverValue" class="metal-inline-value">-</span>
+                </div>
+                <div class="metal-inline-item">
+                  <span class="metal-dot metal-platinum"></span>
+                  <span class="metal-inline-label">Platinum</span>
+                  <span id="platinumValue" class="metal-inline-value">-</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <div class="row g-3 mt-2">
-          <div class="col-md-4">
-            <div class="card shadow-sm w-100">
-              <div class="card-body">
-                <div class="text-uppercase small text-muted">Gold (XAU)</div>
-                <div id="goldPrice" class="h4 m-0">-</div>
-                <div id="goldValue" class="small text-muted mt-2">Total: -</div>
-              </div>
+          <div class="allocation-wrap mt-4">
+            <div class="allocation-row">
+              <span class="allocation-label">Gold</span>
+              <div class="allocation-track"><div id="allocationGoldBar" class="allocation-fill gold"></div></div>
+              <span id="allocationGoldPct" class="allocation-pct">0%</span>
+            </div>
+            <div class="allocation-row">
+              <span class="allocation-label">Silver</span>
+              <div class="allocation-track"><div id="allocationSilverBar" class="allocation-fill silver"></div></div>
+              <span id="allocationSilverPct" class="allocation-pct">0%</span>
+            </div>
+            <div class="allocation-row">
+              <span class="allocation-label">Platinum</span>
+              <div class="allocation-track"><div id="allocationPlatinumBar" class="allocation-fill platinum"></div></div>
+              <span id="allocationPlatinumPct" class="allocation-pct">0%</span>
             </div>
           </div>
-          <div class="col-md-4">
-            <div class="card shadow-sm w-100">
-              <div class="card-body">
-                <div class="text-uppercase small text-muted">Silver (XAG)</div>
-                <div id="silverPrice" class="h4 m-0">-</div>
-                <div id="silverValue" class="small text-muted mt-2">Total: -</div>
-              </div>
+        </div>
+      </section>
+
+      <section id="summaryFilterSection" class="mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="section-title m-0">Holdings Filter</div>
+          <div class="segmented-control" role="group" aria-label="Filter holdings by metal">
+            <button type="button" class="segmented-btn active" data-metal-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="segmented-btn" data-metal-filter="gold" aria-pressed="false">Gold</button>
+            <button type="button" class="segmented-btn" data-metal-filter="silver" aria-pressed="false">Silver</button>
+            <button type="button" class="segmented-btn" data-metal-filter="platinum" aria-pressed="false">Platinum</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricesSection" class="mb-4">
+        <div class="section-title mb-3">Spot Prices</div>
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <div class="dashboard-card spot-card h-100 p-4">
+              <div class="spot-title">?? Gold <span class="text-muted">XAU</span></div>
+              <div id="goldPrice" class="spot-price mt-2">-</div>
+              <div id="goldPriceGram" class="spot-subprice mt-1">- / gram</div>
+              <div class="spot-change mt-3">Day change: <span class="text-muted">&mdash;</span></div>
             </div>
           </div>
-          <div class="col-md-4">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <div class="text-uppercase small text-muted">Platinum (XPT)</div>
-                <div id="platinumPrice" class="h4 m-0">-</div>
-                <div id="platinumValue" class="small text-muted mt-2">Total: -</div>
-              </div>
+          <div class="col-12 col-md-4">
+            <div class="dashboard-card spot-card h-100 p-4">
+              <div class="spot-title">?? Silver <span class="text-muted">XAG</span></div>
+              <div id="silverPrice" class="spot-price mt-2">-</div>
+              <div id="silverPriceGram" class="spot-subprice mt-1">- / gram</div>
+              <div class="spot-change mt-3">Day change: <span class="text-muted">&mdash;</span></div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="dashboard-card spot-card h-100 p-4">
+              <div class="spot-title">?? Platinum <span class="text-muted">XPT</span></div>
+              <div id="platinumPrice" class="spot-price mt-2">-</div>
+              <div id="platinumPriceGram" class="spot-subprice mt-1">- / gram</div>
+              <div class="spot-change mt-3">Day change: <span class="text-muted">&mdash;</span></div>
             </div>
           </div>
         </div>
@@ -62,40 +121,55 @@
 
       <section id="summarySection" class="mb-4">
         <div class="row g-3 align-items-stretch">
-          <div class="col-12 col-lg-3 d-flex">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <div class="d-flex justify-content-between">
-                  <div>
-                    <div class="text-uppercase small text-muted">Total Value</div>
-                    <div id="totalValue" class="display-6 fw-semibold">$0.00</div>
-                  </div>
-                  <div class="badge bg-dark align-self-start">All Metals</div>
+          <div class="col-12 col-xl-6 d-flex">
+            <div class="dashboard-card h-100 w-100 p-4">
+              <div class="section-title mb-3">Bullion Holdings</div>
+              <div class="small text-muted mb-2">Total Bullion (oz)</div>
+              <div id="summaryBullionOz" class="h4 fw-semibold mb-3">0.0000</div>
+
+              <div id="bullionGoldRow" class="holding-row">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>Gold</span>
+                  <span id="summaryBullionGoldOz">0.0000</span>
                 </div>
-                <div id="pricesUpdatedAt" class="small text-muted mt-2">Prices not loaded</div>
+                <div class="holding-track"><div id="bullionGoldBar" class="holding-fill gold"></div></div>
+              </div>
+
+              <div id="bullionSilverRow" class="holding-row mt-3">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>Silver</span>
+                  <span id="summaryBullionSilverOz">0.0000</span>
+                </div>
+                <div class="holding-track"><div id="bullionSilverBar" class="holding-fill silver"></div></div>
+              </div>
+
+              <div id="bullionPlatinumRow" class="holding-row mt-3">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>Platinum</span>
+                  <span id="summaryBullionPlatinumOz">0.0000</span>
+                </div>
+                <div class="holding-track"><div id="bullionPlatinumBar" class="holding-fill platinum"></div></div>
               </div>
             </div>
           </div>
-          <div class="col-12 col-lg-9 d-flex">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <div class="text-uppercase small text-muted mb-2">Inventory Summary</div>
-                <div class="row g-3">
-                  <div class="col-md-5">
-                    <div class="text-muted small">Bullion (oz)</div>
-                    <div class="fw-semibold" id="summaryBullionOz">0.0000</div>
-                    <div class="text-muted small mt-2">Bullion by Metal</div>
-                    <div class="small">
-                      <div>Gold: <span id="summaryBullionGoldOz">0.0000</span></div>
-                      <div>Silver: <span id="summaryBullionSilverOz">0.0000</span></div>
-                      <div>Platinum: <span id="summaryBullionPlatinumOz">0.0000</span></div>
-                    </div>
-                  </div>
-                  <div class="col-md-7">
-                    <div class="text-muted small">Coin Counts</div>
-                    <div id="summaryCoinList" class="small">No coins yet.</div>
-                  </div>
-                </div>
+
+          <div class="col-12 col-xl-6 d-flex">
+            <div class="dashboard-card h-100 w-100 p-4">
+              <div class="section-title mb-3">Coin Collection</div>
+
+              <div id="goldbackGroup" class="coin-group mb-3">
+                <div class="coin-group-title">Goldbacks</div>
+                <div id="summaryGoldbackList" class="coin-list text-muted">No goldbacks yet.</div>
+              </div>
+
+              <div id="silverCoinGroup" class="coin-group mb-3">
+                <div class="coin-group-title">Silver Coins</div>
+                <div id="summarySilverCoinList" class="coin-list text-muted">No silver coins yet.</div>
+              </div>
+
+              <div id="otherCoinGroup" class="coin-group">
+                <div class="coin-group-title">Other Coins</div>
+                <div id="summaryOtherCoinList" class="coin-list text-muted">No other coins yet.</div>
               </div>
             </div>
           </div>
@@ -103,32 +177,30 @@
       </section>
 
       <section id="sharingSection" class="mb-4 d-none">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-              <div>
-                <div class="text-uppercase small text-muted">Sharing</div>
-                <div class="small text-muted">Invite another Google account to view and edit this inventory.</div>
-              </div>
-              <span id="householdRoleBadge" class="badge text-bg-secondary">Member</span>
+        <div class="dashboard-card p-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <div>
+              <div class="section-title">Sharing</div>
+              <div class="small text-muted">Invite another Google account to view and edit this inventory.</div>
             </div>
-            <form id="shareForm" class="row g-2">
-              <div class="col-md-8">
-                <input id="inviteEmail" type="email" class="form-control" placeholder="Invite by email (e.g. spouse@gmail.com)">
-              </div>
-              <div class="col-md-4">
-                <button id="sendInviteBtn" class="btn btn-outline-primary w-100" type="submit">Send Invite</button>
-              </div>
-            </form>
-            <div id="shareStatus" class="small mt-2 text-muted"></div>
-            <div class="small mt-3">
-              <div class="text-muted mb-1">Members</div>
-              <div id="householdMembers">No members yet.</div>
+            <span id="householdRoleBadge" class="badge text-bg-secondary">Member</span>
+          </div>
+          <form id="shareForm" class="row g-2">
+            <div class="col-md-8">
+              <input id="inviteEmail" type="email" class="form-control" placeholder="Invite by email (e.g. spouse@gmail.com)">
             </div>
-            <div class="small mt-3">
-              <div class="text-muted mb-1">Pending Invites</div>
-              <div id="pendingInvites">No pending invites.</div>
+            <div class="col-md-4">
+              <button id="sendInviteBtn" class="btn btn-outline-primary w-100" type="submit">Send Invite</button>
             </div>
+          </form>
+          <div id="shareStatus" class="small mt-2 text-muted"></div>
+          <div class="small mt-3">
+            <div class="text-muted mb-1">Members</div>
+            <div id="householdMembers">No members yet.</div>
+          </div>
+          <div class="small mt-3">
+            <div class="text-muted mb-1">Pending Invites</div>
+            <div id="pendingInvites">No pending invites.</div>
           </div>
         </div>
       </section>
@@ -136,98 +208,98 @@
       <section id="inventorySection">
         <div class="row g-4">
           <div class="col-lg-5">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <h2 class="h5">Add Item</h2>
-                <form id="itemForm" class="mt-3">
+            <div class="dashboard-card p-4">
+              <h2 class="h5">Add Item</h2>
+              <form id="itemForm" class="mt-3">
+                <div class="mb-3">
+                  <label class="form-label">Metal</label>
+                  <select id="metal" class="form-select" required>
+                    <option value="gold">Gold</option>
+                    <option value="silver">Silver</option>
+                    <option value="platinum">Platinum</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Category</label>
+                  <select id="category" class="form-select" required>
+                    <option id="coinCategoryOption" value="coin">Coin</option>
+                    <option value="bullion">Bullion</option>
+                  </select>
+                </div>
+                <div id="coinFields">
                   <div class="mb-3">
-                    <label class="form-label">Metal</label>
-                    <select id="metal" class="form-select" required>
-                      <option value="gold">Gold</option>
-                      <option value="silver">Silver</option>
-                      <option value="platinum">Platinum</option>
+                    <label id="coinTypeLabel" class="form-label">Coin Type</label>
+                    <select id="coinType" class="form-select"></select>
+                  </div>
+                </div>
+                <div id="bullionFields" class="d-none">
+                  <div class="mb-3">
+                    <label class="form-label">Bullion Size</label>
+                    <select id="bullionPreset" class="form-select">
+                      <option value="1 oz">1 oz</option>
+                      <option value="1/2 oz">1/2 oz</option>
+                      <option value="1/4 oz">1/4 oz</option>
+                      <option value="1/10 oz">1/10 oz</option>
+                      <option value="2 oz">2 oz</option>
+                      <option value="5 oz">5 oz</option>
+                      <option value="10 oz">10 oz</option>
+                      <option value="Custom">Custom</option>
                     </select>
                   </div>
                   <div class="mb-3">
-                    <label class="form-label">Category</label>
-                    <select id="category" class="form-select" required>
-                      <option id="coinCategoryOption" value="coin">Coin</option>
-                      <option value="bullion">Bullion</option>
-                    </select>
+                    <label class="form-label">Item Name</label>
+                    <input id="bullionName" class="form-control" placeholder="Bar, round, etc.">
                   </div>
-                  <div id="coinFields">
-                    <div class="mb-3">
-                      <label id="coinTypeLabel" class="form-label">Coin Type</label>
-                      <select id="coinType" class="form-select"></select>
-                    </div>
-                  </div>
-                  <div id="bullionFields" class="d-none">
-                    <div class="mb-3">
-                      <label class="form-label">Bullion Size</label>
-                      <select id="bullionPreset" class="form-select">
-                        <option value="1 oz">1 oz</option>
-                        <option value="1/2 oz">1/2 oz</option>
-                        <option value="1/4 oz">1/4 oz</option>
-                        <option value="1/10 oz">1/10 oz</option>
-                        <option value="2 oz">2 oz</option>
-                        <option value="5 oz">5 oz</option>
-                        <option value="10 oz">10 oz</option>
-                        <option value="Custom">Custom</option>
-                      </select>
-                    </div>
-                    <div class="mb-3">
-                      <label class="form-label">Item Name</label>
-                      <input id="bullionName" class="form-control" placeholder="Bar, round, etc.">
-                    </div>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Grams Per Item</label>
-                    <input id="grams" type="number" step="0.00001" min="0" class="form-control" required>
-                    <div class="form-text">Editable. Use exact weights for your items.</div>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Quantity</label>
-                    <input id="quantity" type="number" step="1" min="1" class="form-control" value="1" required>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <input id="notes" class="form-control" placeholder="Optional">
-                  </div>
-                  <div id="yearField" class="mb-3 d-none">
-                    <label class="form-label">Year</label>
-                    <input id="year" type="number" min="1700" max="2100" step="1" class="form-control" placeholder="e.g. 1964">
-                  </div>
-                  <button class="btn btn-primary w-100" type="submit">Add Item</button>
-                </form>
-              </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Grams Per Item</label>
+                  <input id="grams" type="number" step="0.00001" min="0" class="form-control" required>
+                  <div class="form-text">Editable. Use exact weights for your items.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Quantity</label>
+                  <input id="quantity" type="number" step="1" min="1" class="form-control" value="1" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notes</label>
+                  <input id="notes" class="form-control" placeholder="Optional">
+                </div>
+                <div id="yearField" class="mb-3 d-none">
+                  <label class="form-label">Year</label>
+                  <input id="year" type="number" min="1700" max="2100" step="1" class="form-control" placeholder="e.g. 1964">
+                </div>
+                <button class="btn btn-primary w-100" type="submit">Add Item</button>
+              </form>
             </div>
           </div>
+
           <div class="col-lg-7">
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h2 class="h5 m-0">Inventory</h2>
+            <div class="dashboard-card p-4">
+              <div class="d-flex justify-content-between align-items-center gap-2">
+                <h2 class="h5 m-0">Inventory</h2>
+                <div class="d-flex align-items-center gap-2">
+                  <button id="exportPdfBtn" class="btn btn-outline-primary btn-sm" type="button">Export CSV</button>
                   <span id="itemCount" class="badge text-bg-secondary">0 items</span>
                 </div>
-                <div class="row g-2 align-items-center mt-3">
-                  <div class="col-md-6">
-                    <input id="searchInput" class="form-control" placeholder="Search by type, metal, year, notes">
-                  </div>
-                  <div class="col-md-3">
-                    <select id="metalFilter" class="form-select">
-                      <option value="all">All metals</option>
-                      <option value="gold">Gold</option>
-                      <option value="silver">Silver</option>
-                      <option value="platinum">Platinum</option>
-                    </select>
-                  </div>
-                  <div class="col-md-3 text-md-end">
-                    <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100 w-md-auto">Clear</button>
-                  </div>
+              </div>
+              <div class="row g-2 align-items-center mt-3">
+                <div class="col-md-6">
+                  <input id="searchInput" class="form-control" placeholder="Search by type, metal, year, notes">
                 </div>
-                <div id="itemsAccordion" class="accordion mt-3">
-                  <div class="text-muted">No items yet.</div>
+                <div class="col-md-3">
+                  <select id="metalFilter" class="form-select">
+                    <option value="all">All metals</option>
+                    <option value="gold">Gold</option>
+                    <option value="silver">Silver</option>
+                    <option value="platinum">Platinum</option>
+                  </select>
                 </div>
+                <div class="col-md-3 text-md-end">
+                  <button id="clearFiltersBtn" class="btn btn-outline-secondary w-100 w-md-auto" type="button">Clear</button>
+                </div>
+              </div>
+              <div id="itemsAccordion" class="accordion mt-3">
+                <div class="text-muted">No items yet.</div>
               </div>
             </div>
           </div>
@@ -236,6 +308,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="module" src="app.js?v=1.2.7"></script>
+    <script type="module" src="app.js?v=1.3.0"></script>
   </body>
 </html>

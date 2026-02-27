@@ -26,7 +26,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const TROY_OUNCE_G = 31.1034768;
-const APP_VERSION = "v1.2.7";
+const APP_VERSION = "v1.3.0";
 const COIN_GRAMS_DEFAULT = {
   "Dollar": 24.05,
   "Half Dollar": 12.5,
@@ -90,18 +90,41 @@ const elements = {
   inventorySection: document.getElementById("inventorySection"),
   refreshPricesBtn: document.getElementById("refreshPricesBtn"),
   pricesUpdatedAt: document.getElementById("pricesUpdatedAt"),
+  pricesUpdatedRelative: document.getElementById("pricesUpdatedRelative"),
   goldPrice: document.getElementById("goldPrice"),
+  goldPriceGram: document.getElementById("goldPriceGram"),
   silverPrice: document.getElementById("silverPrice"),
+  silverPriceGram: document.getElementById("silverPriceGram"),
   platinumPrice: document.getElementById("platinumPrice"),
+  platinumPriceGram: document.getElementById("platinumPriceGram"),
   totalValue: document.getElementById("totalValue"),
+  allocationGoldBar: document.getElementById("allocationGoldBar"),
+  allocationSilverBar: document.getElementById("allocationSilverBar"),
+  allocationPlatinumBar: document.getElementById("allocationPlatinumBar"),
+  allocationGoldPct: document.getElementById("allocationGoldPct"),
+  allocationSilverPct: document.getElementById("allocationSilverPct"),
+  allocationPlatinumPct: document.getElementById("allocationPlatinumPct"),
   summaryBullionOz: document.getElementById("summaryBullionOz"),
   summaryBullionGoldOz: document.getElementById("summaryBullionGoldOz"),
   summaryBullionSilverOz: document.getElementById("summaryBullionSilverOz"),
   summaryBullionPlatinumOz: document.getElementById("summaryBullionPlatinumOz"),
-  summaryCoinList: document.getElementById("summaryCoinList"),
+  bullionGoldBar: document.getElementById("bullionGoldBar"),
+  bullionSilverBar: document.getElementById("bullionSilverBar"),
+  bullionPlatinumBar: document.getElementById("bullionPlatinumBar"),
+  bullionGoldRow: document.getElementById("bullionGoldRow"),
+  bullionSilverRow: document.getElementById("bullionSilverRow"),
+  bullionPlatinumRow: document.getElementById("bullionPlatinumRow"),
+  summaryGoldbackList: document.getElementById("summaryGoldbackList"),
+  summarySilverCoinList: document.getElementById("summarySilverCoinList"),
+  summaryOtherCoinList: document.getElementById("summaryOtherCoinList"),
+  goldbackGroup: document.getElementById("goldbackGroup"),
+  silverCoinGroup: document.getElementById("silverCoinGroup"),
+  otherCoinGroup: document.getElementById("otherCoinGroup"),
+  metalFilterButtons: Array.from(document.querySelectorAll("[data-metal-filter]")),
   goldValue: document.getElementById("goldValue"),
   silverValue: document.getElementById("silverValue"),
   platinumValue: document.getElementById("platinumValue"),
+  exportPdfBtn: document.getElementById("exportPdfBtn"),
   itemCount: document.getElementById("itemCount"),
   itemsContainer: document.getElementById("itemsAccordion"),
   itemForm: document.getElementById("itemForm"),
@@ -138,7 +161,10 @@ const state = {
     silver: null,
     platinum: null
   },
-  updatedAt: null
+  updatedAt: null,
+  lastUpdatedMs: null,
+  dashboardMetalFilter: "all",
+  isRefreshingPrices: false
 };
 
 let unsubscribeItems = null;
@@ -447,6 +473,64 @@ function formatNumber(value, decimals = 4) {
   return Number(value).toFixed(decimals);
 }
 
+function exportInventoryCsv() {
+  if (!state.items.length) {
+    alert("No inventory items to export.");
+    return;
+  }
+
+  const escapeCsv = (value) => {
+    const text = String(value ?? "");
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, "\"\"")}"`;
+    }
+    return text;
+  };
+
+  const headers = [
+    "metal",
+    "category",
+    "type",
+    "year",
+    "grams_per_item",
+    "quantity",
+    "total_grams",
+    "estimated_value_usd",
+    "notes"
+  ];
+
+  const lines = [headers.join(",")];
+
+  state.items.forEach((item) => {
+    const rowTotalGrams = item.gramsPerItem * item.quantity;
+    const rowValue = (getPricePerGram(item.metal) ?? 0) * rowTotalGrams;
+    const row = [
+      item.metal,
+      item.category,
+      item.itemType,
+      item.year ?? "",
+      formatNumber(item.gramsPerItem),
+      item.quantity,
+      formatNumber(rowTotalGrams),
+      Number.isFinite(rowValue) ? rowValue.toFixed(2) : "",
+      item.notes ?? ""
+    ];
+    lines.push(row.map(escapeCsv).join(","));
+  });
+
+  const csvContent = `${lines.join("\n")}\n`;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const today = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `inventory-${today}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function getCoinConfigForMetal(metal) {
   if (metal === "gold") {
     return { label: "Goldback", gramsMap: COIN_GRAMS_GOLDBACK };
@@ -515,6 +599,57 @@ function getPricePerGram(metal) {
   return pricePerOz / TROY_OUNCE_G;
 }
 
+function formatUpdatedAgo(lastUpdatedMs) {
+  if (!lastUpdatedMs) return "Updated just now";
+  const elapsed = Math.max(0, Math.floor((Date.now() - lastUpdatedMs) / 1000));
+  if (elapsed < 60) return `Updated ${elapsed} sec ago`;
+  const minutes = Math.floor(elapsed / 60);
+  if (minutes < 60) return `Updated ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return `Updated ${hours} hr ago`;
+}
+
+function renderRefreshButtonState() {
+  if (!elements.refreshPricesBtn) return;
+  elements.refreshPricesBtn.disabled = state.isRefreshingPrices;
+  elements.refreshPricesBtn.textContent = state.isRefreshingPrices
+    ? "Refreshing..."
+    : "Refresh spot prices";
+}
+
+function renderDashboardMetalFilter() {
+  elements.metalFilterButtons.forEach((button) => {
+    const value = button.getAttribute("data-metal-filter");
+    const isActive = value === state.dashboardMetalFilter;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function setDashboardMetalFilter(nextFilter) {
+  state.dashboardMetalFilter = nextFilter;
+  renderDashboardMetalFilter();
+  calculateTotals();
+}
+
+function renderCoinList(target, items, emptyMessage) {
+  if (!target) return;
+  if (!items.length) {
+    target.classList.add("text-muted");
+    target.textContent = emptyMessage;
+    return;
+  }
+  target.classList.remove("text-muted");
+  target.innerHTML = items
+    .map(([label, count]) => `
+      <div class="coin-list-item">
+        <span>${escapeHtml(label)}</span>
+        <span>${count}</span>
+      </div>
+    `)
+    .join("");
+}
+
 function calculateTotals() {
   const totals = {
     gold: 0,
@@ -530,32 +665,54 @@ function calculateTotals() {
   const silverValue = totals.silver * (getPricePerGram("silver") ?? 0);
   const platinumValue = totals.platinum * (getPricePerGram("platinum") ?? 0);
 
-  elements.goldValue.textContent = `Total: ${formatCurrency(goldValue)}`;
-  elements.silverValue.textContent = `Total: ${formatCurrency(silverValue)}`;
-  elements.platinumValue.textContent = `Total: ${formatCurrency(platinumValue)}`;
+  elements.goldValue.textContent = formatCurrency(goldValue);
+  elements.silverValue.textContent = formatCurrency(silverValue);
+  elements.platinumValue.textContent = formatCurrency(platinumValue);
 
   const totalValue = goldValue + silverValue + platinumValue;
   elements.totalValue.textContent = formatCurrency(totalValue);
+
+  const allocation = {
+    gold: totalValue > 0 ? (goldValue / totalValue) * 100 : 0,
+    silver: totalValue > 0 ? (silverValue / totalValue) * 100 : 0,
+    platinum: totalValue > 0 ? (platinumValue / totalValue) * 100 : 0
+  };
+  if (elements.allocationGoldBar) elements.allocationGoldBar.style.width = `${allocation.gold.toFixed(2)}%`;
+  if (elements.allocationSilverBar) elements.allocationSilverBar.style.width = `${allocation.silver.toFixed(2)}%`;
+  if (elements.allocationPlatinumBar) elements.allocationPlatinumBar.style.width = `${allocation.platinum.toFixed(2)}%`;
+  if (elements.allocationGoldPct) elements.allocationGoldPct.textContent = `${Math.round(allocation.gold)}%`;
+  if (elements.allocationSilverPct) elements.allocationSilverPct.textContent = `${Math.round(allocation.silver)}%`;
+  if (elements.allocationPlatinumPct) elements.allocationPlatinumPct.textContent = `${Math.round(allocation.platinum)}%`;
+
+  const summaryItems = state.dashboardMetalFilter === "all"
+    ? state.items
+    : state.items.filter((item) => item.metal === state.dashboardMetalFilter);
 
   const bullionTotals = {
     gold: 0,
     silver: 0,
     platinum: 0
   };
-  const coinCounts = new Map();
+  const goldbacks = new Map();
+  const silverCoins = new Map();
+  const otherCoins = new Map();
 
-  state.items.forEach((item) => {
+  summaryItems.forEach((item) => {
     const totalGrams = item.gramsPerItem * item.quantity;
     if (item.category === "bullion") {
       bullionTotals[item.metal] += totalGrams;
     } else if (item.category === "coin") {
-      const itemTypeLabel =
-        item.metal === "gold"
-          ? item.itemType.replace(/\s*\([^)]*\)\s*$/, "")
-          : item.itemType;
-      const label = `${item.metal} ${itemTypeLabel}`;
-      const current = coinCounts.get(label) ?? 0;
-      coinCounts.set(label, current + item.quantity);
+      if (item.metal === "gold") {
+        const label = item.itemType.replace(/\s*\([^)]*\)\s*$/, "");
+        goldbacks.set(label, (goldbacks.get(label) ?? 0) + item.quantity);
+      } else if (item.metal === "silver") {
+        const label = item.itemType;
+        silverCoins.set(label, (silverCoins.get(label) ?? 0) + item.quantity);
+      } else {
+        // Platinum and custom coin types are grouped as "Other Coins" for a reasonable filter interpretation.
+        const label = `${item.metal} ${item.itemType}`;
+        otherCoins.set(label, (otherCoins.get(label) ?? 0) + item.quantity);
+      }
     }
   });
 
@@ -574,67 +731,129 @@ function calculateTotals() {
     elements.summaryBullionPlatinumOz.textContent = formatNumber(bullionTotals.platinum / TROY_OUNCE_G);
   }
 
-  if (elements.summaryCoinList) {
-    if (!coinCounts.size) {
-      elements.summaryCoinList.textContent = "No coins yet.";
-    } else {
-      const items = Array.from(coinCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-      elements.summaryCoinList.innerHTML = items
-        .map(([label, count]) => `<div>${label}: <strong>${count}</strong></div>`)
-        .join("");
-    }
+  const bullionTotalOz = bullionOzTotal;
+  const goldBullionOz = bullionTotals.gold / TROY_OUNCE_G;
+  const silverBullionOz = bullionTotals.silver / TROY_OUNCE_G;
+  const platinumBullionOz = bullionTotals.platinum / TROY_OUNCE_G;
+  if (elements.bullionGoldBar) {
+    elements.bullionGoldBar.style.width = `${bullionTotalOz > 0 ? (goldBullionOz / bullionTotalOz) * 100 : 0}%`;
+  }
+  if (elements.bullionSilverBar) {
+    elements.bullionSilverBar.style.width = `${bullionTotalOz > 0 ? (silverBullionOz / bullionTotalOz) * 100 : 0}%`;
+  }
+  if (elements.bullionPlatinumBar) {
+    elements.bullionPlatinumBar.style.width = `${bullionTotalOz > 0 ? (platinumBullionOz / bullionTotalOz) * 100 : 0}%`;
+  }
+
+  if (elements.bullionGoldRow) {
+    elements.bullionGoldRow.classList.toggle("d-none", state.dashboardMetalFilter !== "all" && state.dashboardMetalFilter !== "gold");
+  }
+  if (elements.bullionSilverRow) {
+    elements.bullionSilverRow.classList.toggle("d-none", state.dashboardMetalFilter !== "all" && state.dashboardMetalFilter !== "silver");
+  }
+  if (elements.bullionPlatinumRow) {
+    elements.bullionPlatinumRow.classList.toggle("d-none", state.dashboardMetalFilter !== "all" && state.dashboardMetalFilter !== "platinum");
+  }
+
+  const orderedGoldbacks = ["1/2 Goldback", "1 Goldback", "5 Goldback", "10 Goldback", "25 Goldback", "50 Goldback"]
+    .map((label) => [label, goldbacks.get(label) ?? 0])
+    .filter(([, count]) => count > 0);
+  const orderedSilver = ["Dime", "Quarter", "Half Dollar", "Dollar", "Custom"]
+    .map((label) => [label, silverCoins.get(label) ?? 0])
+    .filter(([, count]) => count > 0);
+  const orderedOther = Array.from(otherCoins.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  renderCoinList(elements.summaryGoldbackList, orderedGoldbacks, "No goldbacks yet.");
+  renderCoinList(elements.summarySilverCoinList, orderedSilver, "No silver coins yet.");
+  renderCoinList(elements.summaryOtherCoinList, orderedOther, "No other coins yet.");
+
+  if (elements.goldbackGroup) {
+    elements.goldbackGroup.classList.toggle("d-none", state.dashboardMetalFilter === "silver" || state.dashboardMetalFilter === "platinum");
+  }
+  if (elements.silverCoinGroup) {
+    elements.silverCoinGroup.classList.toggle("d-none", state.dashboardMetalFilter === "gold" || state.dashboardMetalFilter === "platinum");
+  }
+  if (elements.otherCoinGroup) {
+    elements.otherCoinGroup.classList.toggle("d-none", state.dashboardMetalFilter !== "platinum");
   }
 }
 
 function renderPrices() {
   if (state.prices.gold) {
     elements.goldPrice.textContent = `${formatCurrency(state.prices.gold)} / oz`;
+    if (elements.goldPriceGram) {
+      elements.goldPriceGram.textContent = `${formatCurrency(getPricePerGram("gold"))} / gram`;
+    }
   } else {
     elements.goldPrice.textContent = "Unavailable";
+    if (elements.goldPriceGram) elements.goldPriceGram.textContent = "Unavailable";
   }
 
   if (state.prices.silver) {
     elements.silverPrice.textContent = `${formatCurrency(state.prices.silver)} / oz`;
+    if (elements.silverPriceGram) {
+      elements.silverPriceGram.textContent = `${formatCurrency(getPricePerGram("silver"))} / gram`;
+    }
   } else {
     elements.silverPrice.textContent = "Unavailable";
+    if (elements.silverPriceGram) elements.silverPriceGram.textContent = "Unavailable";
   }
 
   if (state.prices.platinum) {
     elements.platinumPrice.textContent = `${formatCurrency(state.prices.platinum)} / oz`;
+    if (elements.platinumPriceGram) {
+      elements.platinumPriceGram.textContent = `${formatCurrency(getPricePerGram("platinum"))} / gram`;
+    }
   } else {
     elements.platinumPrice.textContent = "Unavailable";
+    if (elements.platinumPriceGram) elements.platinumPriceGram.textContent = "Unavailable";
   }
 
   elements.pricesUpdatedAt.textContent = state.updatedAt
     ? `Last updated ${state.updatedAt}`
     : "Prices not loaded";
+  if (elements.pricesUpdatedRelative) {
+    elements.pricesUpdatedRelative.textContent = formatUpdatedAgo(state.lastUpdatedMs);
+  }
+  renderRefreshButtonState();
 }
 
 async function fetchSpotPrices() {
-  const results = await Promise.allSettled(
-    Object.entries(priceEndpoints).map(async ([metal, url]) => {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error(`Price fetch failed for ${metal}`);
-      const data = await response.json();
-      return { metal, price: data.price, updatedAtReadable: data.updatedAtReadable || data.updatedAt };
-    })
-  );
+  state.isRefreshingPrices = true;
+  renderRefreshButtonState();
+  try {
+    const results = await Promise.allSettled(
+      Object.entries(priceEndpoints).map(async ([metal, url]) => {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Price fetch failed for ${metal}`);
+        const data = await response.json();
+        return { metal, price: data.price, updatedAtReadable: data.updatedAtReadable || data.updatedAt };
+      })
+    );
 
-  let latestUpdate = null;
-
-  results.forEach((result) => {
-    if (result.status === "fulfilled") {
-      state.prices[result.value.metal] = result.value.price;
-      if (result.value.updatedAtReadable) {
-        latestUpdate = result.value.updatedAtReadable;
+    let latestUpdate = null;
+    let didUpdateAnyPrice = false;
+    results.forEach((result) => {
+      if (result.status === "fulfilled") {
+        state.prices[result.value.metal] = result.value.price;
+        didUpdateAnyPrice = true;
+        if (result.value.updatedAtReadable) {
+          latestUpdate = result.value.updatedAtReadable;
+        }
       }
-    }
-  });
+    });
 
-  state.updatedAt = latestUpdate;
-  renderPrices();
-  renderItems();
-  calculateTotals();
+    if (didUpdateAnyPrice) {
+      state.updatedAt = latestUpdate ?? new Date().toLocaleString();
+      state.lastUpdatedMs = Date.now();
+    }
+    renderPrices();
+    renderItems();
+    calculateTotals();
+  } finally {
+    state.isRefreshingPrices = false;
+    renderRefreshButtonState();
+  }
 }
 
 function renderItems() {
@@ -686,6 +905,9 @@ function renderItems() {
         const rowTotalGrams = item.gramsPerItem * item.quantity;
         const rowPricePerGram = getPricePerGram(item.metal);
         const rowValue = rowPricePerGram ? rowTotalGrams * rowPricePerGram : null;
+        const rowTroyOz = item.category === "bullion"
+          ? formatNumber(item.gramsPerItem / TROY_OUNCE_G)
+          : "-";
         const isEditing = state.editingId === item.id;
 
       if (isEditing) {
@@ -707,6 +929,7 @@ function renderItems() {
             <td>${itemTypeField}</td>
             <td><input class="form-control form-control-sm" data-field="year" type="number" min="1700" max="2100" value="${item.year ?? ""}"></td>
             <td><input class="form-control form-control-sm" data-field="gramsPerItem" type="number" step="0.0001" min="0" value="${item.gramsPerItem}"></td>
+            <td>${rowTroyOz}</td>
             <td><input class="form-control form-control-sm" data-field="quantity" type="number" step="1" min="1" value="${item.quantity}"></td>
             <td>${formatNumber(rowTotalGrams)}</td>
             <td>${formatCurrency(rowValue)}</td>
@@ -724,6 +947,7 @@ function renderItems() {
           <td>${item.itemType}</td>
           <td>${item.year ?? "-"}</td>
           <td>${formatNumber(item.gramsPerItem)}</td>
+          <td>${rowTroyOz}</td>
           <td>${item.quantity}</td>
           <td>${formatNumber(rowTotalGrams)}</td>
           <td>${formatCurrency(rowValue)}</td>
@@ -755,6 +979,7 @@ function renderItems() {
                       <th>Type</th>
                       <th>Year</th>
                       <th>Grams</th>
+                      <th>Troy Oz</th>
                       <th>Qty</th>
                       <th>Total Grams</th>
                       <th>Value</th>
@@ -1059,6 +1284,12 @@ function bindEvents() {
   });
 
   elements.refreshPricesBtn.addEventListener("click", fetchSpotPrices);
+  elements.metalFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextFilter = button.getAttribute("data-metal-filter") ?? "all";
+      setDashboardMetalFilter(nextFilter);
+    });
+  });
   elements.category.addEventListener("change", toggleCategoryFields);
   elements.coinType.addEventListener("change", setFormDefaults);
   elements.bullionPreset.addEventListener("change", setBullionDefaults);
@@ -1076,6 +1307,7 @@ function bindEvents() {
     elements.metalFilter.value = "all";
     applyFilters();
   });
+  elements.exportPdfBtn?.addEventListener("click", exportInventoryCsv);
 }
 
 onAuthStateChanged(auth, (user) => {
@@ -1140,8 +1372,15 @@ updateCategoryLabel();
 setFormDefaults();
 toggleCategoryFields();
 setBullionDefaults();
+renderDashboardMetalFilter();
+renderRefreshButtonState();
 bindEvents();
 fetchSpotPrices();
+setInterval(() => {
+  if (elements.pricesUpdatedRelative) {
+    elements.pricesUpdatedRelative.textContent = formatUpdatedAgo(state.lastUpdatedMs);
+  }
+}, 15000);
 
 if (elements.versionNumber) {
   elements.versionNumber.textContent = APP_VERSION;
